@@ -1,0 +1,22 @@
+name: Deploy Dist folder
+on: push
+
+jobs:
+    test:            # Ime joba
+        runs-on: ubuntu-latest  # Okruženje
+        steps:
+          - name: Checkout      #kloniraj repo
+            uses: actions/checkout@v4
+
+          - name: Setup Node.js
+            uses: actions/setup-node@v4
+            with:
+              node-version: 22
+
+          - name: Install dependencies
+            run: npm install
+          - name: Run tests
+            run: npm test
+          - name: Completed
+            run: echo "Test job was completed"
+                          
