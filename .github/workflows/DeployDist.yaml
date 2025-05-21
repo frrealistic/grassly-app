@@ -1,5 +1,5 @@
 name: Deploy Dist folder
-on: push
+on: [push, workflow_dispatch]
 
 jobs:
     test:            # Ime joba
