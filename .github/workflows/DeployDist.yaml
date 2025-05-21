@@ -21,11 +21,9 @@ jobs:
         steps:
           - name: Checkout      #kloniraj repo
             uses: actions/checkout@v4
-
           - name: Setup Node and install dependencies
-            uses: ./.github/actions/setupnode
+            uses: ./.github/setupnode
           
-
           # - name: Install Backend Dependencies
           #   working-directory: ./backend
           #   run: npm install
@@ -45,24 +43,9 @@ jobs:
       runs-on: ubuntu-latest  # Okruženje
       steps:
         - name: Checkout      #kloniraj repo
-          uses: actions/checkout@v4
-
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: 22
-
-        - name: Cache Frontend Dependencies
-          uses: actions/cache@v4
-          id: frontend-cache
-          with:
-            path: ./frontend/node_modules
-            key: ${{ runner.os }}-frontend-node-${{ hashFiles('frontend/package-lock.json') }}
-
-        - name: Install Frontend Dependencies
-          if: steps.frontend-cache.outputs.cache-hit != 'true'
-          working-directory: ./frontend
-          run: npm install
+          uses: actions/checkout@v4      
+        - name: Setup Node and install dependencies
+          uses: ./.github/setupnode
 
         # - name: Install Backend Dependencies
         #   working-directory: ./backend
