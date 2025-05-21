@@ -22,7 +22,7 @@ jobs:
           - name: Checkout      #kloniraj repo
             uses: actions/checkout@v4
           - name: Setup Node and install dependencies
-            uses: ./.github/action/setupnode
+            uses: ./.github/actions/setupnode
           
           # - name: Install Backend Dependencies
           #   working-directory: ./backend
