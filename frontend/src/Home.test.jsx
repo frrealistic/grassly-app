@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import App from './App';
+import Home from './pages/Home';
 import { expect, test, describe, it } from 'vitest';
 
 test('prikazuje naslov Grassly', () => {
-  render(<App />);
+  render(<Home />);
   const naslov = screen.getByText(/grassly/i);
   expect(naslov).toBeInTheDocument();
 });
+

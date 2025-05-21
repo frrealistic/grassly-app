@@ -2,7 +2,8 @@ name: Deploy Dist folder
 #on: [push, workflow_dispatch]
 on: 
   push:
-    branches: [ main ]
+    branches: 
+      - main
     paths-ignore:
       - 'frontend/node_modules/**'
       - 'frontend/dist/**'
@@ -12,7 +13,8 @@ on:
       - 'frontend/LICENSE'
       - 'frontend/.gitignore'
       - '.github/workflows/*'
-      
+  workflow_dispatch:
+                 
 jobs:
     test:            # Ime joba
         runs-on: ubuntu-latest  # Okruženje
@@ -20,22 +22,9 @@ jobs:
           - name: Checkout      #kloniraj repo
             uses: actions/checkout@v4
 
-          - name: Setup Node.js
-            uses: actions/setup-node@v4
-            with:
-              node-version: 22
-
-          - name: Cache Frontend Dependencies
-            uses: actions/cache@v4
-            id: frontend-cache
-            with:
-              path: ./frontend/node_modules
-              key: ${{ runner.os }}-frontend-node-${{ hashFiles('frontend/package-lock.json') }}
-                
-          - name: Install Frontend Dependencies
-            if: steps.frontend-cache.outputs.cache-hit != 'true'
-            working-directory: ./frontend
-            run: npm install
+          - name: Setup Node and install dependencies
+            uses: ./.github/actions/setupnode
+          
 
           # - name: Install Backend Dependencies
           #   working-directory: ./backend

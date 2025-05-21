@@ -1,0 +1,21 @@
+name: "Setup node and install dependencies"
+description: "sets up Node.js, caches dependencies and installs them"
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: 22
+        - name: Cache Frontend Dependencies
+          uses: actions/cache@v4
+          id: frontend-cache
+          with:
+            path: ./frontend/node_modules
+            key: ${{ runner.os }}-frontend-node-${{ hashFiles('frontend/package-lock.json') }}
+        - name: Install Frontend Dependencies
+          if: steps.frontend-cache.outputs.cache-hit != 'true'
+          working-directory: ./frontend
+          run: npm install
+          shell: bash
+           
