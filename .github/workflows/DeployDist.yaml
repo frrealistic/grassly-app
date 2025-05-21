@@ -1,6 +1,18 @@
 name: Deploy Dist folder
-on: [push, workflow_dispatch]
-
+#on: [push, workflow_dispatch]
+on: 
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'frontend/node_modules/**'
+      - 'frontend/dist/**'
+    #  - 'frontend/package-lock.json'
+    #  - 'frontend/package.json'
+      - 'frontend/README.md'
+      - 'frontend/LICENSE'
+      - 'frontend/.gitignore'
+      - '.github/workflows/*'
+      
 jobs:
     test:            # Ime joba
         runs-on: ubuntu-latest  # Okruženje
@@ -76,10 +88,26 @@ jobs:
         #   run: npm run build
 
         - name: Completed
-          run: echo "Build job was completed"        
+          run: echo "Build job was completed"      
+
+        - name: Upload dist Artifacts frontend
+          uses: actions/upload-artifact@v4
+          with:
+            name: dist-files
+            path: ./frontend/dist
+
     deploy:
       needs: build
       runs-on: ubuntu-latest  
       steps:
+        - name: Download dist Artifacts
+          uses: actions/download-artifact@v4
+          with:
+            name: dist-files
+            path: ./frontend/dist
+
         - name: Deploy Dist    
-          run: echo "Deploying completed"
+          run: |
+            echo "Deploying files below"
+            ls dist
+            echo "Deploying completed"
