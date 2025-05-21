@@ -20,7 +20,14 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use(cors());
+// Configure CORS
+app.use(cors({
+  origin: 'http://localhost:5173', // Your frontend URL
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());                        //za parsiranje
 app.use(express.urlencoded({ extended: true }));//isto za HTML format
 app.use(cookieParser());
