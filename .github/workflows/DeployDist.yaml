@@ -31,4 +31,32 @@ jobs:
 
           - name: Completed
             run: echo "Test job was completed"
-                          
+    build:
+      runs-on: ubuntu-latest  # Okruženje
+      steps:
+        - name: Checkout      #kloniraj repo
+          uses: actions/checkout@v4
+
+        - name: Setup Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: 22
+
+        - name: Install Frontend Dependencies
+          working-directory: ./frontend
+          run: npm install
+
+        # - name: Install Backend Dependencies
+        #   working-directory: ./backend
+        #   run: npm install
+
+        - name: Run Frontend Build
+          working-directory: ./frontend
+          run: npm run build 
+
+        # - name: Run Backend Build
+        #   working-directory: ./backend
+        #   run: npm run build
+
+        - name: Completed
+          run: echo "Build job was completed"                       
