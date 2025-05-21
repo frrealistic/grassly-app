@@ -32,10 +32,10 @@
 ## 📦 Pokretanje
 
 🔧 Back
-  cd backend
-  npm install
-  npm run dev
-
+```bash
+cd backend
+npm install
+npm run dev
 🌐 Front
   cd frontend
   npm install
