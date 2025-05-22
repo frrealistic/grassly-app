@@ -20,5 +20,5 @@ runs:
       if: steps.frontend-cache.outputs.cache-hit != 'true'
       working-directory: ./frontend
       shell: bash
-      run: npm install
+      run: npm ci
            
