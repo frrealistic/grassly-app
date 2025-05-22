@@ -9,17 +9,26 @@ describe('Home', () => {
     localStorage.clear()
   })
 
-  it('prikazuje dobrodošlicu kada korisnik nije prijavljen', () => {
+  it('shows welcome content when user is not logged in', () => {
     render(
       <BrowserRouter>
         <Home />
       </BrowserRouter>
     )
-    expect(screen.getByText('Dobrodošli u Grassly!')).toBeInTheDocument()
-    expect(screen.getByText('Prijavite se za korištenje aplikacije.')).toBeInTheDocument()
+    
+    // Check for main elements in the welcome screen
+    expect(screen.getByText('Grassly')).toBeInTheDocument()
+    expect(screen.getByText('Management and monitoring of sports fields.')).toBeInTheDocument()
+    expect(screen.getByText('Smart. Simple.')).toBeInTheDocument()
+    expect(screen.getByText('Create Account')).toBeInTheDocument()
+    
+    // Check navigation links
+    expect(screen.getByText('About')).toBeInTheDocument()
+    expect(screen.getByText('Demo')).toBeInTheDocument()
+    expect(screen.getByText('Contact')).toBeInTheDocument()
   })
 
-  it('prikazuje naslov Grassly kada je korisnik prijavljen', () => {
+  it('shows dashboard when user is logged in', () => {
     // Simulate logged in state
     localStorage.setItem('accessToken', 'dummy-token')
     
@@ -28,7 +37,10 @@ describe('Home', () => {
         <Home />
       </BrowserRouter>
     )
-    expect(screen.getByText('Grassly - Vaši travnjaci')).toBeInTheDocument()
+    
+    // Check for dashboard elements
+    expect(screen.getByText('Grassly - Your Sports Fields')).toBeInTheDocument()
+    expect(screen.getByText('Logout')).toBeInTheDocument()
   })
 })
 

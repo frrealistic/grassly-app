@@ -49,7 +49,7 @@ export default function Home() {
           </p>
           <button 
             className="bg-blue-600 text-white font-semibold px-8 py-3 rounded-xl shadow hover:bg-blue-700 transition"
-            onClick={() => navigate('/register')}
+            onClick={() => navigate('/login')}
           >
             Create Account
           </button>
