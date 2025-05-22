@@ -17,15 +17,15 @@ describe('Home', () => {
     )
     
     // Check for main elements in the welcome screen
-    expect(screen.getByText('Grassly')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Grassly' })).toBeInTheDocument()
     expect(screen.getByText('Management and monitoring of sports fields.')).toBeInTheDocument()
     expect(screen.getByText('Smart. Simple.')).toBeInTheDocument()
-    expect(screen.getByText('Create Account')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument()
     
     // Check navigation links
-    expect(screen.getByText('About')).toBeInTheDocument()
-    expect(screen.getByText('Demo')).toBeInTheDocument()
-    expect(screen.getByText('Contact')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'About' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Demo' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Contact' })).toBeInTheDocument()
   })
 
   it('shows dashboard when user is logged in', () => {
@@ -39,8 +39,8 @@ describe('Home', () => {
     )
     
     // Check for dashboard elements
-    expect(screen.getByText('Grassly - Your Sports Fields')).toBeInTheDocument()
-    expect(screen.getByText('Logout')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Grassly - Your Sports Fields' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument()
   })
 })
 
