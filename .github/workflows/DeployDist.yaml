@@ -81,5 +81,5 @@ jobs:
         - name: Deploy Dist    
           run: |
             echo "Deploying files below"
-            ls dist
+            ls ./frontend/dist
             echo "Deploying completed"
