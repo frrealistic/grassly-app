@@ -43,7 +43,7 @@ describe('Home', () => {
       </BrowserRouter>
     )
     
-    // Check for dashboard elements
+    // Check for dashboard elements...
     expect(screen.getByRole('heading', { name: 'Grassly - Your Sports Fields' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument()
   })
