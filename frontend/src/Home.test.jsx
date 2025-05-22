@@ -18,8 +18,13 @@ describe('Home', () => {
     
     // Check for main elements in the welcome screen
     expect(screen.getByRole('heading', { name: 'Grassly' })).toBeInTheDocument()
-    expect(screen.getByText('Management and monitoring of sports fields.')).toBeInTheDocument()
-    expect(screen.getByText('Smart. Simple.')).toBeInTheDocument()
+    
+    // Check for text content that might be split across elements
+    const descriptionText = screen.getByText((content, element) => {
+      return element.textContent === 'Management and monitoring of sports fields.Smart. Simple.'
+    })
+    expect(descriptionText).toBeInTheDocument()
+    
     expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument()
     
     // Check navigation links
