@@ -1,19 +1,20 @@
 name: Deploy Dist folder
-#on: [push, workflow_dispatch]
-on: 
-  push:
-    branches: 
-      - main
-    paths-ignore:
-      - 'frontend/node_modules/**'
-      - 'frontend/dist/**'
-    #  - 'frontend/package-lock.json'
-    #  - 'frontend/package.json'
-      - 'frontend/README.md'
-      - 'frontend/LICENSE'
-      - 'frontend/.gitignore'
-      - '.github/workflows/*'
-  workflow_dispatch:
+on: [ workflow_dispatch]
+
+# on: 
+#   push:
+#     branches: 
+#       - main
+#     paths-ignore:
+#       - 'frontend/node_modules/**'
+#       - 'frontend/dist/**'
+#     #  - 'frontend/package-lock.json'
+#     #  - 'frontend/package.json'
+#       - 'frontend/README.md'
+#       - 'frontend/LICENSE'
+#       - 'frontend/.gitignore'
+#       - '.github/workflows/*'
+#   workflow_dispatch:
                  
 jobs:
     test:            # Ime joba
