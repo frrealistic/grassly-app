@@ -220,6 +220,76 @@ app.post('/api/logout', (req, res) => {
   res.json({ message: 'Logout successful.' });
 });
 
+// Fields endpoints
+app.get('/api/fields', authenticateToken, async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        id, 
+        name, 
+        location, 
+        latitude, 
+        longitude, 
+        size, 
+        surface_type, 
+        created_at 
+      FROM fields 
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `;
+    const fields = await query(sql, [req.user.userId]);
+    res.json(fields);
+  } catch (err) {
+    console.error('Error fetching fields:', err);
+    res.status(500).json({ error: 'Error fetching fields.' });
+  }
+});
+
+app.post('/api/fields', authenticateToken, async (req, res) => {
+  const { name, location, latitude, longitude, size, surface_type } = req.body;
+
+  if (!name || !location || !latitude || !longitude) {
+    return res.status(400).json({ error: 'Name, location, latitude, and longitude are required.' });
+  }
+
+  try {
+    const sql = `
+      INSERT INTO fields (
+        user_id, 
+        name, 
+        location, 
+        latitude, 
+        longitude, 
+        size, 
+        surface_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    
+    const result = await query(sql, [
+      req.user.userId,
+      name,
+      location,
+      latitude,
+      longitude,
+      size || null,
+      surface_type || null
+    ]);
+
+    res.status(201).json({
+      id: result.insertId,
+      name,
+      location,
+      latitude,
+      longitude,
+      size,
+      surface_type
+    });
+  } catch (err) {
+    console.error('Error creating field:', err);
+    res.status(500).json({ error: 'Error creating field.' });
+  }
+});
+
 //listen() otvori HTTP server i čeka zahtjeve
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);

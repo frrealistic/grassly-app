@@ -1,10 +1,173 @@
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default marker icons in Leaflet with React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Map click handler component
+function LocationMarker({ onLocationSelect, initialPosition }) {
+  const [position, setPosition] = useState(initialPosition);
+  
+  useMapEvents({
+    click(e) {
+      console.log('Map clicked:', e.latlng);
+      setPosition(e.latlng);
+      onLocationSelect(e.latlng);
+    },
+  });
+
+  // Update position when initialPosition changes
+  useEffect(() => {
+    if (initialPosition) {
+      setPosition(initialPosition);
+    }
+  }, [initialPosition]);
+
+  return position === null ? null : (
+    <Marker position={position} />
+  );
+}
+
+// Map center component
+function MapCenter({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center);
+  }, [center, map]);
+  return null;
+}
 
 export default function Home() {
   const isLoggedIn = !!localStorage.getItem('accessToken');
   const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [fields, setFields] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    location: '',
+    size: '',
+    surface_type: ''
+  });
+  const [mapCenter, setMapCenter] = useState([40.7128, -74.0060]); // Default center (New York)
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState(null);
+  const [initialMarkerPosition, setInitialMarkerPosition] = useState(null);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchFields();
+    }
+  }, [isLoggedIn]);
+
+  const fetchFields = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/fields', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFields(data);
+      }
+    } catch (error) {
+      console.error('Error fetching fields:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLocationSelect = async (latlng) => {
+    console.log('Location selected:', latlng);
+    setSelectedLocation(latlng);
+    
+    try {
+      // Use a more detailed reverse geocoding request
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&addressdetails=1&zoom=18`
+      );
+      const data = await response.json();
+      console.log('Location data:', data);
+
+      // Format the address more nicely
+      let formattedAddress = '';
+      if (data.address) {
+        const parts = [];
+        if (data.address.road) parts.push(data.address.road);
+        if (data.address.house_number) parts.push(data.address.house_number);
+        if (data.address.city) parts.push(data.address.city);
+        if (data.address.state) parts.push(data.address.state);
+        if (data.address.country) parts.push(data.address.country);
+        
+        formattedAddress = parts.join(', ');
+      } else {
+        formattedAddress = data.display_name;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        location: formattedAddress
+      }));
+    } catch (error) {
+      console.error('Error getting location name:', error);
+      setFormData(prev => ({
+        ...prev,
+        location: `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedLocation) {
+      alert('Please select a location on the map');
+      return;
+    }
+
+    try {
+      const res = await fetch('http://localhost:3000/api/fields', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          ...formData,
+          latitude: selectedLocation.lat,
+          longitude: selectedLocation.lng
+        })
+      });
+
+      if (res.ok) {
+        const newField = await res.json();
+        setFields(prev => [...prev, newField]);
+        setShowAddFieldModal(false);
+        setFormData({
+          name: '',
+          location: '',
+          size: '',
+          surface_type: ''
+        });
+        setSelectedLocation(null);
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Error creating field');
+      }
+    } catch (error) {
+      console.error('Error creating field:', error);
+      alert('Error creating field');
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -23,6 +186,48 @@ export default function Home() {
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+    }
+  };
+
+  const handleAddFieldClick = () => {
+    console.log('Add field button clicked');
+    setShowAddFieldModal(true);
+    setIsLocating(true);
+    setLocationError(null);
+    setInitialMarkerPosition(null);
+    setSelectedLocation(null);
+    setFormData({
+      name: '',
+      location: '',
+      size: '',
+      surface_type: ''
+    });
+    
+    // Request user's location
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('Got user location:', position);
+          const { latitude, longitude } = position.coords;
+          setMapCenter([latitude, longitude]);
+          setInitialMarkerPosition([latitude, longitude]);
+          handleLocationSelect({ lat: latitude, lng: longitude });
+          setIsLocating(false);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          setLocationError('Unable to get your location. Please allow location access or select a location manually.');
+          setIsLocating(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      );
+    } else {
+      setLocationError('Geolocation is not supported by your browser.');
+      setIsLocating(false);
     }
   };
 
@@ -235,23 +440,188 @@ export default function Home() {
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>Grassly - Your Sports Fields</h1>
-        <button 
-          onClick={handleLogout}
-          style={{
-            backgroundColor: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Logout
-        </button>
+    <div className="min-h-screen font-sans bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Header */}
+      <header className="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md z-50 border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-2">
+              <span className="text-3xl animate-bounce">🌱</span>
+              <span className="font-bold text-2xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Grassly
+              </span>
+            </div>
+            <button 
+              onClick={handleLogout}
+              className="px-4 py-2 text-red-600 hover:text-red-700 transition-colors duration-300"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="pt-32 pb-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+          ) : fields.length === 0 ? (
+            <div className="text-center">
+              <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md mx-auto">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <span className="text-3xl">🏟️</span>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">No Fields Yet</h2>
+                <p className="text-gray-600 mb-8">
+                  Start by adding your first sports field to begin monitoring and managing it.
+                </p>
+                <button
+                  onClick={handleAddFieldClick}
+                  className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                >
+                  Add Your First Field
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {fields.map(field => (
+                <div key={field.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">{field.name}</h3>
+                  <p className="text-gray-600 mb-4">{field.location}</p>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span>Size: {field.size || 'Not specified'}</span>
+                    <span>•</span>
+                    <span>Surface: {field.surface_type || 'Not specified'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      {/* Your actual app here: list of fields, add button, etc. */}
+
+      {/* Add Field Modal */}
+      {showAddFieldModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold text-gray-800">Add New Field</h3>
+              <button
+                onClick={() => setShowAddFieldModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {isLocating && (
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-600 flex items-center gap-2">
+                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Getting your location...
+              </div>
+            )}
+            {locationError && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
+                {locationError}
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Field Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                    placeholder="Enter field name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Size (in square meters)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.size}
+                    onChange={(e) => setFormData(prev => ({ ...prev, size: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                    placeholder="Enter field size"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Surface Type
+                  </label>
+                  <select
+                    value={formData.surface_type}
+                    onChange={(e) => setFormData(prev => ({ ...prev, surface_type: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+                  >
+                    <option value="">Select surface type</option>
+                    <option value="natural_grass">Natural Grass</option>
+                    <option value="artificial_grass">Artificial Grass</option>
+                    <option value="clay">Clay</option>
+                    <option value="concrete">Concrete</option>
+                    <option value="asphalt">Asphalt</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    readOnly
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50"
+                    placeholder="Select location on map"
+                  />
+                </div>
+              </div>
+              
+              <div className="h-[400px] w-full rounded-xl overflow-hidden border border-gray-200">
+                <MapContainer
+                  center={mapCenter}
+                  zoom={13}
+                  style={{ height: '100%', width: '100%' }}
+                  className="z-0"
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  />
+                  <LocationMarker 
+                    onLocationSelect={handleLocationSelect} 
+                    initialPosition={initialMarkerPosition}
+                  />
+                  <MapCenter center={mapCenter} />
+                </MapContainer>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                >
+                  Add Field
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
