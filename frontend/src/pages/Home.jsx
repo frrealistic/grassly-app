@@ -122,16 +122,10 @@ export default function Home() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                   <button 
-                    onClick={() => navigate('/register')}
+                    onClick={() => navigate('/login')}
                     className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    Kreiraj račun
-                  </button>
-                  <button 
-                    onClick={() => navigate('/login')}
-                    className="px-8 py-4 border-2 border-blue-600 text-blue-600 font-semibold rounded-xl hover:bg-blue-50 transition-all duration-200"
-                  >
-                    Prijavi se
+                    Login/Register
                   </button>
                 </div>
               </div>

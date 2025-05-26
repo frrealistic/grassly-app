@@ -13,9 +13,17 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minuta
-  max: 5, // maksimalno 5 pokušaja
-  message: { error: 'Previše pokušaja prijave. Molimo pokušajte kasnije' },
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // maximum 20 attempts
+  message: { error: 'Too many login attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // maximum 10 attempts
+  message: { error: 'Too many registration attempts. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -38,12 +46,12 @@ const authenticateToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
   if (!token) {
-    return res.status(401).json({ error: 'Potrebna je autorizacija.' });
+    return res.status(401).json({ error: 'Authorization required.' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Nevažeći token.' });
+      return res.status(403).json({ error: 'Invalid token.' });
     }
     req.user = user;
     next();
@@ -51,14 +59,14 @@ const authenticateToken = (req, res, next) => {
 };
 
 //ruta za registraciju
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', registerLimiter, async (req, res) => {
     console.log('Request body:', req.body);
     console.log('Content-Type:', req.headers['content-type']);
     
     const { name, email, password } = req.body
   
     if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Sva polja su obavezna.' })
+      return res.status(400).json({ error: 'All fields are required.' })
     }
   
     try {
@@ -69,13 +77,13 @@ app.post('/api/register', async (req, res) => {
       const sql = `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`
       await query(sql, [name, email, hashedPassword])
   
-      res.status(201).json({ message: 'Korisnik registriran.' })
+      res.status(201).json({ message: 'User registered successfully.' })
     } catch (err) {
       console.error('Registration error details:', err);
       if (err.message.includes('UNIQUE constraint failed')) {
-        res.status(409).json({ error: 'Email već postoji.' })
+        res.status(409).json({ error: 'Email already exists.' })
       } else {
-        res.status(500).json({ error: 'Greška prilikom registracije.' })
+        res.status(500).json({ error: 'Registration error.' })
       }
     }
   })
@@ -85,7 +93,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     const { email, password } = req.body;
   
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email i lozinka su obavezni.' });
+      return res.status(400).json({ error: 'Email and password are required.' });
     }
   
     try {
@@ -93,14 +101,14 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       const users = await query(sql, [email]);
   
       if (users.length === 0) {
-        return res.status(401).json({ error: 'Pogrešan email ili lozinka.' });
+        return res.status(401).json({ error: 'Invalid email or password.' });
       }
   
       const user = users[0];
   
       const validPassword = await bcrypt.compare(password, user.password);
       if (!validPassword) {
-        return res.status(401).json({ error: 'Pogrešan email ili lozinka.' });
+        return res.status(401).json({ error: 'Invalid email or password.' });
       }
   
       const accessToken = jwt.sign(
@@ -124,7 +132,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       });
   
       res.json({
-        message: 'Uspješna prijava.',
+        message: 'Login successful.',
         accessToken,
         user: {
           id: user.id,
@@ -134,14 +142,14 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       });
     } catch (err) {
       console.error('Login error:', err);
-      res.status(500).json({ error: 'Greška prilikom prijave.' });
+      res.status(500).json({ error: 'Login error.' });
     }
   });
 
 app.post('/api/refresh', (req, res) => {
 const token = req.cookies.refreshToken;
 if (!token) {
-    return res.status(401).json({ error: 'Nema refresh tokena.' });
+    return res.status(401).json({ error: 'No refresh token.' });
 }
 
 try {
@@ -155,7 +163,7 @@ try {
 
     res.json({ accessToken: newAccessToken });
 } catch (err) {
-    res.status(403).json({ error: 'Nevažeći refresh token.' });
+    res.status(403).json({ error: 'Invalid refresh token.' });
 }
 });
   
@@ -170,19 +178,19 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     const users = await query(sql, [req.user.userId]);
     
     if (users.length === 0) {
-      return res.status(404).json({ error: 'Korisnik nije pronađen.' });
+      return res.status(404).json({ error: 'User not found.' });
     }
 
     res.json(users[0]);
   } catch (err) {
     console.error('Profile error:', err);
-    res.status(500).json({ error: 'Greška prilikom dohvaćanja profila.' });
+    res.status(500).json({ error: 'Error fetching profile.' });
   }
 });
 
 app.get('/api/check-token', authenticateToken, (req, res) => {
     res.json({
-      message: 'Token je važeći.',
+      message: 'Token is valid.',
       user: req.user
     });
   });
@@ -195,7 +203,7 @@ app.post('/api/logout', (req, res) => {
     sameSite: 'Strict'
   });
   
-  res.json({ message: 'Uspješna odjava.' });
+  res.json({ message: 'Logout successful.' });
 });
 
 //listen() otvori HTTP server i čeka zahtjeve
