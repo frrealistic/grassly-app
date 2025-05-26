@@ -13,10 +13,10 @@ function initDatabase() {
     db.serialize(() => {
         db.run(`CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
+                    name TEXT,
                     email TEXT UNIQUE NOT NULL, 
                     password TEXT NOT NULL,
-                    isadmin INTEGER DEFAULT 0, -- 0 = nije admin, 1 = admin
+                    isadmin INTEGER DEFAULT 0, -- 0 = not admin, 1 = admin
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
         db.run(`CREATE TABLE IF NOT EXISTS fields (

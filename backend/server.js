@@ -58,33 +58,47 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Helper function to check if email exists
+async function checkEmailExists(email) {
+  try {
+    const sql = 'SELECT email FROM users WHERE email = ?';
+    const users = await query(sql, [email]);
+    return users.length > 0;
+  } catch (err) {
+    console.error('Error checking email:', err);
+    throw err;
+  }
+}
+
 //ruta za registraciju
 app.post('/api/register', registerLimiter, async (req, res) => {
     console.log('Request body:', req.body);
     console.log('Content-Type:', req.headers['content-type']);
     
-    const { name, email, password } = req.body
+    const { email, password } = req.body
   
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'All fields are required.' })
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required.' })
     }
-  
+
     try {
+      // Check if email already exists
+      const emailExists = await checkEmailExists(email);
+      if (emailExists) {
+        return res.status(409).json({ error: 'This email is already registered. Please use a different email or try logging in.' });
+      }
+  
       // Hashiranje lozinke
       const hashedPassword = await bcrypt.hash(password, 10) // 10 = salt rounds
   
       // Spremi usera u bazu
-      const sql = `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`
-      await query(sql, [name, email, hashedPassword])
+      const sql = `INSERT INTO users (email, password) VALUES (?, ?)`
+      await query(sql, [email, hashedPassword])
   
       res.status(201).json({ message: 'User registered successfully.' })
     } catch (err) {
       console.error('Registration error details:', err);
-      if (err.message.includes('UNIQUE constraint failed')) {
-        res.status(409).json({ error: 'Email already exists.' })
-      } else {
-        res.status(500).json({ error: 'Registration error.' })
-      }
+      res.status(500).json({ error: 'Registration error.' })
     }
   })
 
