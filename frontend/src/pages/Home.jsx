@@ -98,10 +98,86 @@ export default function Home() {
         <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white">
           <div className="max-w-7xl mx-auto">
             <h2 className="text-3xl sm:text-4xl font-bold text-center mb-16 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Zašto Grassly?
+              Why Choose Grassly?
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {/* Features ... */}
+              {/* Smart Monitoring */}
+              <div className="group p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl group-hover:scale-105 transition-transform duration-300">
+                    📊
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">Smart Monitoring</h3>
+                  <p className="text-sm text-gray-600">
+                    Real-time field condition monitoring with advanced sensors and AI-powered analytics.
+                  </p>
+                </div>
+              </div>
+
+              {/* Weather Integration */}
+              <div className="group p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl group-hover:scale-105 transition-transform duration-300">
+                    🌤️
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">Weather Integration</h3>
+                  <p className="text-sm text-gray-600">
+                    Smart weather forecasting and automated maintenance scheduling based on conditions.
+                  </p>
+                </div>
+              </div>
+
+              {/* Resource Optimization */}
+              <div className="group p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl group-hover:scale-105 transition-transform duration-300">
+                    💧
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">Resource Optimization</h3>
+                  <p className="text-sm text-gray-600">
+                    Efficient water and resource management with smart irrigation systems.
+                  </p>
+                </div>
+              </div>
+
+              {/* Maintenance Tracking */}
+              <div className="group p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl group-hover:scale-105 transition-transform duration-300">
+                    📝
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">Maintenance Tracking</h3>
+                  <p className="text-sm text-gray-600">
+                    Comprehensive maintenance logs and automated task scheduling.
+                  </p>
+                </div>
+              </div>
+
+              {/* Mobile Access */}
+              <div className="group p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl group-hover:scale-105 transition-transform duration-300">
+                    📱
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">Mobile Access</h3>
+                  <p className="text-sm text-gray-600">
+                    Manage your fields on the go with our intuitive mobile application.
+                  </p>
+                </div>
+              </div>
+
+              {/* Data Analytics */}
+              <div className="group p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
+                <div className="flex flex-col items-center text-center">
+                  <div className="w-14 h-14 mb-4 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-2xl group-hover:scale-105 transition-transform duration-300">
+                    📈
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2 text-gray-800">Data Analytics</h3>
+                  <p className="text-sm text-gray-600">
+                    Detailed insights and reports to optimize field performance and maintenance.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
