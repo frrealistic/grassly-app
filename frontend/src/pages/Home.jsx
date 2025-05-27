@@ -55,8 +55,13 @@ export default function Home() {
   const [formData, setFormData] = useState({
     name: '',
     location: '',
-    size: '',
-    surface_type: ''
+    area: '',
+    lat: null,
+    lng: null,
+    topLeftLat: null,
+    topLeftLng: null,
+    bottomRightLat: null,
+    bottomRightLng: null
   });
   const [mapCenter, setMapCenter] = useState([40.7128, -74.0060]); // Default center (New York)
   const [isLocating, setIsLocating] = useState(false);
@@ -92,14 +97,12 @@ export default function Home() {
     setSelectedLocation(latlng);
     
     try {
-      // Use a more detailed reverse geocoding request
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&addressdetails=1&zoom=18`
       );
       const data = await response.json();
       console.log('Location data:', data);
 
-      // Format the address more nicely
       let formattedAddress = '';
       if (data.address) {
         const parts = [];
@@ -114,15 +117,29 @@ export default function Home() {
         formattedAddress = data.display_name;
       }
 
+      // Calculate approximate field boundaries (100m radius)
+      const radius = 0.001; // approximately 100m in degrees
       setFormData(prev => ({
         ...prev,
-        location: formattedAddress
+        location: formattedAddress,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        topLeftLat: latlng.lat + radius,
+        topLeftLng: latlng.lng - radius,
+        bottomRightLat: latlng.lat - radius,
+        bottomRightLng: latlng.lng + radius
       }));
     } catch (error) {
       console.error('Error getting location name:', error);
       setFormData(prev => ({
         ...prev,
-        location: `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`
+        location: `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        topLeftLat: latlng.lat + 0.001,
+        topLeftLng: latlng.lng - 0.001,
+        bottomRightLat: latlng.lat - 0.001,
+        bottomRightLng: latlng.lng + 0.001
       }));
     }
   };
@@ -143,8 +160,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           ...formData,
-          latitude: selectedLocation.lat,
-          longitude: selectedLocation.lng
+          area: parseFloat(formData.area) || null
         })
       });
 
@@ -155,8 +171,13 @@ export default function Home() {
         setFormData({
           name: '',
           location: '',
-          size: '',
-          surface_type: ''
+          area: '',
+          lat: null,
+          lng: null,
+          topLeftLat: null,
+          topLeftLng: null,
+          bottomRightLat: null,
+          bottomRightLng: null
         });
         setSelectedLocation(null);
       } else {
@@ -199,8 +220,13 @@ export default function Home() {
     setFormData({
       name: '',
       location: '',
-      size: '',
-      surface_type: ''
+      area: '',
+      lat: null,
+      lng: null,
+      topLeftLat: null,
+      topLeftLng: null,
+      bottomRightLat: null,
+      bottomRightLng: null
     });
     
     // Request user's location
@@ -493,9 +519,7 @@ export default function Home() {
                   <h3 className="text-xl font-semibold text-gray-800 mb-2">{field.name}</h3>
                   <p className="text-gray-600 mb-4">{field.location}</p>
                   <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>Size: {field.size || 'Not specified'}</span>
-                    <span>•</span>
-                    <span>Surface: {field.surface_type || 'Not specified'}</span>
+                    <span>Area: {field.area || 'Not specified'}</span>
                   </div>
                 </div>
               ))}
@@ -506,7 +530,15 @@ export default function Home() {
 
       {/* Add Field Modal */}
       {showAddFieldModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            // Only close if clicking the overlay itself, not its children
+            if (e.target === e.currentTarget) {
+              setShowAddFieldModal(false);
+            }
+          }}
+        >
           <div className="bg-white rounded-2xl shadow-xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-bold text-gray-800">Add New Field</h3>
@@ -550,32 +582,15 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Size (in square meters)
+                    Area (in square meters)
                   </label>
                   <input
                     type="number"
-                    value={formData.size}
-                    onChange={(e) => setFormData(prev => ({ ...prev, size: e.target.value }))}
+                    value={formData.area}
+                    onChange={(e) => setFormData(prev => ({ ...prev, area: e.target.value }))}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-                    placeholder="Enter field size"
+                    placeholder="Enter field area"
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Surface Type
-                  </label>
-                  <select
-                    value={formData.surface_type}
-                    onChange={(e) => setFormData(prev => ({ ...prev, surface_type: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
-                  >
-                    <option value="">Select surface type</option>
-                    <option value="natural_grass">Natural Grass</option>
-                    <option value="artificial_grass">Artificial Grass</option>
-                    <option value="clay">Clay</option>
-                    <option value="concrete">Concrete</option>
-                    <option value="asphalt">Asphalt</option>
-                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -594,7 +609,7 @@ export default function Home() {
               <div className="h-[400px] w-full rounded-xl overflow-hidden border border-gray-200">
                 <MapContainer
                   center={mapCenter}
-                  zoom={13}
+                  zoom={20}
                   style={{ height: '100%', width: '100%' }}
                   className="z-0"
                 >
