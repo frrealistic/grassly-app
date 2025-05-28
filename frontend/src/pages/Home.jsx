@@ -67,6 +67,7 @@ export default function Home() {
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState(null);
   const [initialMarkerPosition, setInitialMarkerPosition] = useState(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (isLoggedIn) {
