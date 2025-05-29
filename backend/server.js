@@ -247,8 +247,12 @@ app.get('/api/fields', authenticateToken, async (req, res) => {
 
 app.post('/api/fields', authenticateToken, async (req, res) => {
   const { name, location, latitude, longitude, size, surface_type } = req.body;
+  
+  console.log('Received field data:', req.body); // Debug log
+  console.log('User ID:', req.user.userId); // Debug log
 
   if (!name || !location || !latitude || !longitude) {
+    console.log('Missing required fields:', { name, location, latitude, longitude }); // Debug log
     return res.status(400).json({ error: 'Name, location, latitude, and longitude are required.' });
   }
 
@@ -265,6 +269,9 @@ app.post('/api/fields', authenticateToken, async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     
+    console.log('SQL Query:', sql); // Debug log
+    console.log('Query params:', [req.user.userId, name, location, latitude, longitude, size || null, surface_type || null]); // Debug log
+    
     const result = await query(sql, [
       req.user.userId,
       name,
@@ -274,6 +281,8 @@ app.post('/api/fields', authenticateToken, async (req, res) => {
       size || null,
       surface_type || null
     ]);
+
+    console.log('Query result:', result); // Debug log
 
     res.status(201).json({
       id: result.insertId,
@@ -285,8 +294,8 @@ app.post('/api/fields', authenticateToken, async (req, res) => {
       surface_type
     });
   } catch (err) {
-    console.error('Error creating field:', err);
-    res.status(500).json({ error: 'Error creating field.' });
+    console.error('Detailed error creating field:', err); // More detailed error logging
+    res.status(500).json({ error: 'Error creating field.', details: err.message });
   }
 });
 

@@ -22,6 +22,29 @@ function MapCenter({ center }) {
   return null;
 }
 
+// Add this new component to track map movement
+function MapEvents({ onMove }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    const handleMove = () => {
+      const center = map.getCenter();
+      console.log('Map moved to:', [center.lat, center.lng]);
+      onMove([center.lat, center.lng]);
+    };
+
+    // Initial center
+    handleMove();
+
+    map.on('moveend', handleMove);
+    return () => {
+      map.off('moveend', handleMove);
+    };
+  }, [map, onMove]);
+  
+  return null;
+}
+
 // Map click handler component
 function LocationMarker({ initialPosition }) {
   const [position, setPosition] = useState(initialPosition);
@@ -36,6 +59,24 @@ function LocationMarker({ initialPosition }) {
   return position === null ? null : (
     <Marker position={position} />
   );
+}
+
+// Add this new component to handle map clicks
+function MapClickHandler({ onLocationSelect }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    const handleClick = (e) => {
+      onLocationSelect(e.latlng);
+    };
+
+    map.on('click', handleClick);
+    return () => {
+      map.off('click', handleClick);
+    };
+  }, [map, onLocationSelect]);
+  
+  return null;
 }
 
 // Add these new functions before the Home component
@@ -67,7 +108,7 @@ const fetchPitches = async (lat, lon, radius = 1000) => {
 };
 
 // Add this new component for rendering GeoJSON
-function PitchLayer({ data }) {
+function PitchLayer({ data, onPitchSelect }) {
   if (!data) return null;
 
   return (
@@ -80,10 +121,94 @@ function PitchLayer({ data }) {
         fillOpacity: 0.2
       })}
       onEachFeature={(feature, layer) => {
-        layer.bindPopup(feature.properties.tags?.name || 'Sports Pitch');
+        const name = feature.properties.tags?.name || 'Sports Pitch';
+        const sport = feature.properties.tags?.sport || 'Unknown sport';
+        
+        // Calculate area and coordinates
+        const area = calculateArea(feature);
+        const coordinates = getCoordinates(feature);
+        
+        // Create popup content with just the information
+        const popupContent = L.DomUtil.create('div', 'p-2');
+        const content = L.DomUtil.create('div', 'mb-2', popupContent);
+        content.innerHTML = `
+          <strong>${name}</strong><br>
+          <span class="text-sm text-gray-600">${sport}</span>
+        `;
+        
+        // Add click handler to the layer itself
+        layer.on('click', () => {
+          // Update form data with pitch information
+          onPitchSelect({
+            area: area,
+            ...coordinates
+          });
+        });
+
+        layer.bindPopup(popupContent);
       }}
     />
   );
+}
+
+// Helper function to calculate area in square meters
+function calculateArea(feature) {
+  if (!feature.geometry || !feature.geometry.coordinates) return null;
+
+  // For polygons, calculate the area
+  if (feature.geometry.type === 'Polygon') {
+    const coordinates = feature.geometry.coordinates[0];
+    let area = 0;
+    
+    // Using the shoelace formula to calculate area
+    for (let i = 0; i < coordinates.length - 1; i++) {
+      area += coordinates[i][0] * coordinates[i + 1][1];
+      area -= coordinates[i][1] * coordinates[i + 1][0];
+    }
+    
+    // Convert to square meters (approximate)
+    // 1 degree is approximately 111,111 meters at the equator
+    const areaInSquareMeters = Math.abs(area) * 111111 * 111111;
+    return Math.round(areaInSquareMeters);
+  }
+  
+  return null;
+}
+
+// Helper function to get coordinates
+function getCoordinates(feature) {
+  if (!feature.geometry || !feature.geometry.coordinates) return {};
+
+  if (feature.geometry.type === 'Polygon') {
+    const coordinates = feature.geometry.coordinates[0];
+    // Get the center point
+    const center = coordinates.reduce(
+      (acc, coord) => [acc[0] + coord[0], acc[1] + coord[1]],
+      [0, 0]
+    ).map(coord => coord / coordinates.length);
+
+    // Get the bounds
+    const bounds = coordinates.reduce(
+      (acc, coord) => ({
+        minLat: Math.min(acc.minLat, coord[1]),
+        maxLat: Math.max(acc.maxLat, coord[1]),
+        minLng: Math.min(acc.minLng, coord[0]),
+        maxLng: Math.max(acc.maxLng, coord[0])
+      }),
+      { minLat: 90, maxLat: -90, minLng: 180, maxLng: -180 }
+    );
+
+    return {
+      lat: center[1],
+      lng: center[0],
+      topLeftLat: bounds.maxLat,
+      topLeftLng: bounds.minLng,
+      bottomRightLat: bounds.minLat,
+      bottomRightLng: bounds.maxLng
+    };
+  }
+
+  return {};
 }
 
 export default function Home() {
@@ -110,6 +235,8 @@ export default function Home() {
   const [initialMarkerPosition, setInitialMarkerPosition] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pitchData, setPitchData] = useState(null);
+  const [editingField, setEditingField] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -189,75 +316,10 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedLocation) {
-      alert('Please select a location on the map');
-      return;
-    }
-
-    try {
-      const res = await fetch('http://localhost:3000/api/fields', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
-          ...formData,
-          area: parseFloat(formData.area) || null
-        })
-      });
-
-      if (res.ok) {
-        const newField = await res.json();
-        setFields(prev => [...prev, newField]);
-        setShowAddFieldModal(false);
-        setFormData({
-          name: '',
-          location: '',
-          area: '',
-          lat: null,
-          lng: null,
-          topLeftLat: null,
-          topLeftLng: null,
-          bottomRightLat: null,
-          bottomRightLng: null
-        });
-        setSelectedLocation(null);
-      } else {
-        const error = await res.json();
-        alert(error.error || 'Error creating field');
-      }
-    } catch (error) {
-      console.error('Error creating field:', error);
-      alert('Error creating field');
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      const res = await fetch('http://localhost:3000/api/logout', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!res.ok) throw new Error('Error during logout');
-
-      localStorage.removeItem('accessToken');
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
   const handleAddFieldClick = () => {
     console.log('Add field button clicked');
     setShowAddFieldModal(true);
+    setEditingField(null);
     setIsLocating(true);
     setLocationError(null);
     setInitialMarkerPosition(null);
@@ -299,6 +361,165 @@ export default function Home() {
     } else {
       setLocationError('Geolocation is not supported by your browser.');
       setIsLocating(false);
+    }
+  };
+
+  const handleEditField = (field) => {
+    setEditingField(field);
+    setShowAddFieldModal(true);
+    setFormData({
+      name: field.name,
+      location: field.location,
+      area: field.size,
+      lat: field.latitude,
+      lng: field.longitude,
+      topLeftLat: field.latitude + 0.001,
+      topLeftLng: field.longitude - 0.001,
+      bottomRightLat: field.latitude - 0.001,
+      bottomRightLng: field.longitude + 0.001
+    });
+    setMapCenter([field.latitude, field.longitude]);
+    setSelectedLocation({ lat: field.latitude, lng: field.longitude });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedLocation) {
+      alert('Please select a location on the map');
+      return;
+    }
+
+    try {
+      // Transform the data to match backend expectations
+      const fieldData = {
+        name: formData.name,
+        location: formData.location,
+        latitude: formData.lat,
+        longitude: formData.lng,
+        size: formData.area,
+        surface_type: null
+      };
+
+      console.log('Sending field data:', fieldData);
+      console.log('Auth token:', localStorage.getItem('accessToken'));
+
+      const url = editingField 
+        ? `http://localhost:3000/api/fields/${editingField.id}`
+        : 'http://localhost:3000/api/fields';
+      
+      const method = editingField ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify(fieldData)
+      });
+
+      const responseData = await res.json();
+      console.log('Server response:', responseData);
+
+      if (res.ok) {
+        if (editingField) {
+          setFields(prev => prev.map(field => 
+            field.id === editingField.id ? { ...field, ...responseData } : field
+          ));
+        } else {
+          setFields(prev => [...prev, responseData]);
+        }
+        setShowAddFieldModal(false);
+        setFormData({
+          name: '',
+          location: '',
+          area: '',
+          lat: null,
+          lng: null,
+          topLeftLat: null,
+          topLeftLng: null,
+          bottomRightLat: null,
+          bottomRightLng: null
+        });
+        setSelectedLocation(null);
+        setPitchData(null);
+        setEditingField(null);
+      } else {
+        console.error('Error response:', {
+          status: res.status,
+          statusText: res.statusText,
+          data: responseData
+        });
+        
+        if (res.status === 401) {
+          alert('Your session has expired. Please log in again.');
+          localStorage.removeItem('accessToken');
+          navigate('/login');
+        } else {
+          alert(`Error ${editingField ? 'updating' : 'creating'} field: ${responseData.error}${responseData.details ? `\nDetails: ${responseData.details}` : ''}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert(`Error ${editingField ? 'updating' : 'creating'} field: ${error.message}`);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error('Error during logout');
+
+      localStorage.removeItem('accessToken');
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  // Add this new function to handle map movement
+  const handleMapMove = (e) => {
+    const center = e.target.getCenter();
+    setMapCenter([center.lat, center.lng]);
+  };
+
+  // Add this new function to search for fields
+  const handleSearchFields = async () => {
+    if (!mapCenter) {
+      console.error('No map center available');
+      return;
+    }
+
+    setIsSearching(true);
+    // Reset previous search results
+    setPitchData(null);
+    setSelectedLocation(null);
+    
+    try {
+      console.log('Starting search at:', mapCenter);
+      const pitches = await fetchPitches(mapCenter[0], mapCenter[1]);
+      console.log('Search complete. Found pitches:', pitches);
+      
+      if (pitches && pitches.features) {
+        setPitchData(pitches);
+        setSelectedLocation({ lat: mapCenter[0], lng: mapCenter[1] });
+      } else {
+        console.log('No pitches found in the area');
+        setPitchData(null);
+      }
+    } catch (error) {
+      console.error('Error searching fields:', error);
+      alert('Error searching for fields. Please try again.');
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -558,37 +779,58 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {fields.map(field => (
-                <div key={field.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">{field.name}</h3>
-                  <p className="text-gray-600 mb-4">{field.location}</p>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>Area: {field.area || 'Not specified'}</span>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {fields.map(field => (
+                  <div 
+                    key={`field-${field.id}`} 
+                    className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 cursor-pointer"
+                    onClick={() => handleEditField(field)}
+                  >
+                    <h3 className="text-xl font-semibold text-gray-800 mb-2">{field.name}</h3>
+                    <p className="text-gray-600 mb-4">{field.location}</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>Area: {field.size || 'Not specified'}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+
+              {/* Floating Add Button */}
+              <button
+                onClick={handleAddFieldClick}
+                className="fixed bottom-8 right-8 w-14 h-14 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {/* Add Field Modal */}
+      {/* Add/Edit Field Modal */}
       {showAddFieldModal && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={(e) => {
-            // Only close if clicking the overlay itself, not its children
             if (e.target === e.currentTarget) {
               setShowAddFieldModal(false);
+              setEditingField(null);
             }
           }}
         >
           <div className="bg-white rounded-2xl shadow-xl p-8 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-gray-800">Add New Field</h3>
+              <h3 className="text-2xl font-bold text-gray-800">
+                {editingField ? 'Edit Field' : 'Add New Field'}
+              </h3>
               <button
-                onClick={() => setShowAddFieldModal(false)}
+                onClick={() => {
+                  setShowAddFieldModal(false);
+                  setEditingField(null);
+                }}
                 className="text-gray-500 hover:text-gray-700"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -651,7 +893,7 @@ export default function Home() {
                 </div>
               </div>
               
-              <div className="h-[400px] w-full rounded-xl overflow-hidden border border-gray-200">
+              <div className="relative h-[400px] w-full rounded-xl overflow-hidden border border-gray-200">
                 <MapContainer
                   center={mapCenter}
                   zoom={18}
@@ -663,11 +905,59 @@ export default function Home() {
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
                   <LocationMarker initialPosition={initialMarkerPosition} />
-                  <MapCenter center={mapCenter} />
-                  {selectedLocation && (
-                    <PitchLayer data={pitchData} />
+                  <MapEvents onMove={(center) => {
+                    console.log('Map center updated:', center);
+                    setMapCenter(center);
+                  }} />
+                  <MapClickHandler onLocationSelect={handleLocationSelect} />
+                  {selectedLocation && pitchData && (
+                    <PitchLayer 
+                      data={pitchData} 
+                      onPitchSelect={(pitchData) => {
+                        console.log('Pitch selected:', pitchData);
+                        setFormData(prev => ({
+                          ...prev,
+                          area: pitchData.area,
+                          lat: pitchData.lat,
+                          lng: pitchData.lng,
+                          topLeftLat: pitchData.topLeftLat,
+                          topLeftLng: pitchData.topLeftLng,
+                          bottomRightLat: pitchData.bottomRightLat,
+                          bottomRightLng: pitchData.bottomRightLng
+                        }));
+                        // Also update the location name when a pitch is selected
+                        handleLocationSelect({ lat: pitchData.lat, lng: pitchData.lng });
+                      }}
+                    />
                   )}
                 </MapContainer>
+                {/* Search Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    console.log('Search button clicked. Current map center:', mapCenter);
+                    handleSearchFields();
+                  }}
+                  disabled={isSearching}
+                  className="absolute top-4 right-4 px-4 py-2 bg-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 z-[1000]"
+                >
+                  {isSearching ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Searching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <span>Search Fields</span>
+                    </>
+                  )}
+                </button>
               </div>
 
               <div className="flex justify-end">
@@ -675,7 +965,7 @@ export default function Home() {
                   type="submit"
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  Add Field
+                  {editingField ? 'Update Field' : 'Add Field'}
                 </button>
               </div>
             </form>

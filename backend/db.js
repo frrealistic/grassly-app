@@ -19,21 +19,24 @@ function initDatabase() {
                     isadmin INTEGER DEFAULT 0, -- 0 = not admin, 1 = admin
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
-        db.run(`CREATE TABLE IF NOT EXISTS fields (
+        
+        // Drop the fields table if it exists
+        db.run(`DROP TABLE IF EXISTS fields`);
+        
+        // Recreate the fields table with the correct structure
+        db.run(`CREATE TABLE fields (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    userId INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     location TEXT,
-                    area REAL,
-                    lat REAL,
-                    lng REAL,
-                    topLeftLat REAL,
-                    topLeftLng REAL,
-                    bottomRightLat REAL,
-                    bottomRightLng REAL,
+                    latitude REAL,
+                    longitude REAL,
+                    size REAL,
+                    surface_type TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )`);
+        
         db.run(`CREATE TABLE IF NOT EXISTS probes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     fieldId INTEGER NOT NULL,
@@ -42,7 +45,7 @@ function initDatabase() {
                     description TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (fieldId) REFERENCES fields(id) ON DELETE CASCADE
-                )`)
+                )`);
         db.run(`CREATE TABLE IF NOT EXISTS measurements (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     probeId INTEGER NOT NULL,
@@ -52,8 +55,6 @@ function initDatabase() {
                     measured_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (probeId) REFERENCES probes(id) ON DELETE CASCADE
                 )`)
-
-
     });
 }
 
