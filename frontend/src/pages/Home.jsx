@@ -1,8 +1,9 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+import osmtogeojson from 'osmtogeojson';
 
 // Fix for default marker icons in Leaflet with React
 delete L.Icon.Default.prototype._getIconUrl;
@@ -12,18 +13,19 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Map center component
+function MapCenter({ center }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom()); // Keep the current zoom level
+  }, [center, map]);
+  return null;
+}
+
 // Map click handler component
-function LocationMarker({ onLocationSelect, initialPosition }) {
+function LocationMarker({ initialPosition }) {
   const [position, setPosition] = useState(initialPosition);
   
-  useMapEvents({
-    click(e) {
-      console.log('Map clicked:', e.latlng);
-      setPosition(e.latlng);
-      onLocationSelect(e.latlng);
-    },
-  });
-
   // Update position when initialPosition changes
   useEffect(() => {
     if (initialPosition) {
@@ -36,13 +38,52 @@ function LocationMarker({ onLocationSelect, initialPosition }) {
   );
 }
 
-// Map center component
-function MapCenter({ center }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView(center);
-  }, [center, map]);
-  return null;
+// Add these new functions before the Home component
+const getOverpassQuery = (lat, lon, radius = 1000) => `
+  [out:json][timeout:25];
+  (
+    node["leisure"="pitch"](around:${radius},${lat},${lon});
+    way["leisure"="pitch"](around:${radius},${lat},${lon});
+    relation["leisure"="pitch"](around:${radius},${lat},${lon});
+  );
+  out body;
+  >;
+  out skel qt;
+`;
+
+const fetchPitches = async (lat, lon, radius = 1000) => {
+  try {
+    const query = getOverpassQuery(lat, lon, radius);
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: query,
+    });
+    const data = await response.json();
+    return osmtogeojson(data);
+  } catch (error) {
+    console.error('Error fetching pitches:', error);
+    return null;
+  }
+};
+
+// Add this new component for rendering GeoJSON
+function PitchLayer({ data }) {
+  if (!data) return null;
+
+  return (
+    <GeoJSON 
+      data={data} 
+      style={() => ({
+        color: '#3388ff',
+        weight: 2,
+        fillColor: '#3388ff',
+        fillOpacity: 0.2
+      })}
+      onEachFeature={(feature, layer) => {
+        layer.bindPopup(feature.properties.tags?.name || 'Sports Pitch');
+      }}
+    />
+  );
 }
 
 export default function Home() {
@@ -68,6 +109,7 @@ export default function Home() {
   const [locationError, setLocationError] = useState(null);
   const [initialMarkerPosition, setInitialMarkerPosition] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pitchData, setPitchData] = useState(null);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -97,6 +139,10 @@ export default function Home() {
     console.log('Location selected:', latlng);
     setSelectedLocation(latlng);
     
+    // Fetch nearby pitches
+    const pitches = await fetchPitches(latlng.lat, latlng.lng);
+    setPitchData(pitches);
+    
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&addressdetails=1&zoom=18`
@@ -118,17 +164,15 @@ export default function Home() {
         formattedAddress = data.display_name;
       }
 
-      // Calculate approximate field boundaries (100m radius)
-      const radius = 0.001; // approximately 100m in degrees
       setFormData(prev => ({
         ...prev,
         location: formattedAddress,
         lat: latlng.lat,
         lng: latlng.lng,
-        topLeftLat: latlng.lat + radius,
-        topLeftLng: latlng.lng - radius,
-        bottomRightLat: latlng.lat - radius,
-        bottomRightLng: latlng.lng + radius
+        topLeftLat: latlng.lat + 0.001,
+        topLeftLng: latlng.lng - 0.001,
+        bottomRightLat: latlng.lat - 0.001,
+        bottomRightLng: latlng.lng + 0.001
       }));
     } catch (error) {
       console.error('Error getting location name:', error);
@@ -610,7 +654,7 @@ export default function Home() {
               <div className="h-[400px] w-full rounded-xl overflow-hidden border border-gray-200">
                 <MapContainer
                   center={mapCenter}
-                  zoom={20}
+                  zoom={18}
                   style={{ height: '100%', width: '100%' }}
                   className="z-0"
                 >
@@ -618,11 +662,11 @@ export default function Home() {
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                   />
-                  <LocationMarker 
-                    onLocationSelect={handleLocationSelect} 
-                    initialPosition={initialMarkerPosition}
-                  />
+                  <LocationMarker initialPosition={initialMarkerPosition} />
                   <MapCenter center={mapCenter} />
+                  {selectedLocation && (
+                    <PitchLayer data={pitchData} />
+                  )}
                 </MapContainer>
               </div>
 
