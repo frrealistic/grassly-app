@@ -16,8 +16,11 @@ L.Icon.Default.mergeOptions({
 // Map center component
 function MapCenter({ center }) {
   const map = useMap();
+  
   useEffect(() => {
-    map.setView(center, map.getZoom()); // Keep the current zoom level
+    if (center && center[0] && center[1]) {
+      map.setView(center, map.getZoom());
+    }
   }, [center, map]);
   return null;
 }
@@ -25,16 +28,21 @@ function MapCenter({ center }) {
 // Add this new component to track map movement
 function MapEvents({ onMove }) {
   const map = useMap();
+  const lastCenterRef = useRef(null);
   
   useEffect(() => {
     const handleMove = () => {
       const center = map.getCenter();
-      console.log('Map moved to:', [center.lat, center.lng]);
-      onMove([center.lat, center.lng]);
+      const newCenter = [center.lat, center.lng];
+      
+      // Only call onMove if the center has actually changed
+      if (!lastCenterRef.current || 
+          lastCenterRef.current[0] !== newCenter[0] || 
+          lastCenterRef.current[1] !== newCenter[1]) {
+        lastCenterRef.current = newCenter;
+        onMove(newCenter);
+      }
     };
-
-    // Initial center
-    handleMove();
 
     map.on('moveend', handleMove);
     return () => {
@@ -246,17 +254,45 @@ export default function Home() {
 
   const fetchFields = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/fields', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setFields(data);
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        console.error('No access token found');
+        return;
       }
+
+      console.log('Attempting to fetch fields...');
+      const res = await fetch('http://localhost:3000/api/fields', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      console.log('Response status:', res.status);
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null);
+        console.error('Error response:', {
+          status: res.status,
+          statusText: res.statusText,
+          data: errorData
+        });
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      console.log('Successfully fetched fields:', data);
+      
+      setFields(data);
     } catch (error) {
       console.error('Error fetching fields:', error);
+      if (error.message.includes('401')) {
+        console.log('Token might be invalid or expired');
+        localStorage.removeItem('accessToken');
+        navigate('/login');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -342,19 +378,55 @@ export default function Home() {
         (position) => {
           console.log('Got user location:', position);
           const { latitude, longitude } = position.coords;
-          setMapCenter([latitude, longitude]);
-          setInitialMarkerPosition([latitude, longitude]);
+          const newPosition = [latitude, longitude];
+          
+          console.log('Setting new map center:', newPosition);
+          // Update map center first with a reasonable zoom level
+          setMapCenter(newPosition);
+          
+          // Then update other state
+          setInitialMarkerPosition(newPosition);
+          setSelectedLocation({ lat: latitude, lng: longitude });
+          
+          // Update form data with coordinates
+          setFormData(prev => ({
+            ...prev,
+            lat: latitude,
+            lng: longitude,
+            topLeftLat: latitude + 0.001,
+            topLeftLng: longitude - 0.001,
+            bottomRightLat: latitude - 0.001,
+            bottomRightLng: longitude + 0.001
+          }));
+          
+          // Get address for the location
           handleLocationSelect({ lat: latitude, lng: longitude });
           setIsLocating(false);
         },
         (error) => {
           console.error('Error getting location:', error);
-          setLocationError('Unable to get your location. Please allow location access or select a location manually.');
+          let errorMessage = 'Unable to get your location. ';
+          
+          switch(error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage += 'Please allow location access in your browser settings.';
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage += 'Location information is unavailable.';
+              break;
+            case error.TIMEOUT:
+              errorMessage += 'Location request timed out. Please try again.';
+              break;
+            default:
+              errorMessage += 'Please select a location manually.';
+          }
+          
+          setLocationError(errorMessage);
           setIsLocating(false);
         },
         {
           enableHighAccuracy: true,
-          timeout: 5000,
+          timeout: 10000,
           maximumAge: 0
         }
       );
@@ -486,9 +558,8 @@ export default function Home() {
   };
 
   // Add this new function to handle map movement
-  const handleMapMove = (e) => {
-    const center = e.target.getCenter();
-    setMapCenter([center.lat, center.lng]);
+  const handleMapMove = (center) => {
+    setMapCenter(center);
   };
 
   // Add this new function to search for fields
@@ -899,16 +970,17 @@ export default function Home() {
                   zoom={18}
                   style={{ height: '100%', width: '100%' }}
                   className="z-0"
+                  zoomControl={true}
                 >
                   <TileLayer
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    url="https://tile.openstreetmap.de/{z}/{x}/{y}.png"
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    maxZoom={19}
+                    minZoom={3}
                   />
+                  <MapCenter center={mapCenter} />
                   <LocationMarker initialPosition={initialMarkerPosition} />
-                  <MapEvents onMove={(center) => {
-                    console.log('Map center updated:', center);
-                    setMapCenter(center);
-                  }} />
+                  <MapEvents onMove={handleMapMove} />
                   <MapClickHandler onLocationSelect={handleLocationSelect} />
                   {selectedLocation && pitchData && (
                     <PitchLayer 
