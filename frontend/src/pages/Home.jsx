@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents, useMap, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, useMapEvents, useMap, GeoJSON, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import osmtogeojson from 'osmtogeojson';
@@ -53,22 +53,6 @@ function MapEvents({ onMove }) {
   return null;
 }
 
-// Map click handler component
-function LocationMarker({ initialPosition }) {
-  const [position, setPosition] = useState(initialPosition);
-  
-  // Update position when initialPosition changes
-  useEffect(() => {
-    if (initialPosition) {
-      setPosition(initialPosition);
-    }
-  }, [initialPosition]);
-
-  return position === null ? null : (
-    <Marker position={position} />
-  );
-}
-
 // Add this new component to handle map clicks
 function MapClickHandler({ onLocationSelect }) {
   const map = useMap();
@@ -116,44 +100,42 @@ const fetchPitches = async (lat, lon, radius = 1000) => {
 };
 
 // Add this new component for rendering GeoJSON
-function PitchLayer({ data, onPitchSelect }) {
+function PitchLayer({ data, onPitchSelect, selectedPitch }) {
   if (!data) return null;
 
   return (
     <GeoJSON 
       data={data} 
-      style={() => ({ 
-        color: '#3388ff',
-        weight: 2,
-        fillColor: '#3388ff',
-        fillOpacity: 0.2
-      })}
+      style={feature => {
+        // Highlight if selected
+        if (
+          selectedPitch &&
+          feature.geometry.type === 'Polygon' &&
+          selectedPitch.lat === getCoordinates(feature).lat &&
+          selectedPitch.lng === getCoordinates(feature).lng
+        ) {
+          return {
+            color: '#eab308', // yellow border
+            weight: 4,
+            fillColor: '#fde68a', // yellow fill
+            fillOpacity: 0.4
+          };
+        }
+        return {
+          color: '#3388ff',
+          weight: 2,
+          fillColor: '#3388ff',
+          fillOpacity: 0.2
+        };
+      }}
+      pointToLayer={() => null}
       onEachFeature={(feature, layer) => {
-        const name = feature.properties.tags?.name || 'Sports Pitch';
-        const sport = feature.properties.tags?.sport || 'Unknown sport';
-        
-        // Calculate area and coordinates
-        const area = calculateArea(feature);
-        const coordinates = getCoordinates(feature);
-        
-        // Create popup content with just the information
-        const popupContent = L.DomUtil.create('div', 'p-2');
-        const content = L.DomUtil.create('div', 'mb-2', popupContent);
-        content.innerHTML = `
-          <strong>${name}</strong><br>
-          <span class="text-sm text-gray-600">${sport}</span>
-        `;
-        
-        // Add click handler to the layer itself
         layer.on('click', () => {
-          // Update form data with pitch information
           onPitchSelect({
-            area: area,
-            ...coordinates
+            area: calculateArea(feature),
+            ...getCoordinates(feature)
           });
         });
-
-        layer.bindPopup(popupContent);
       }}
     />
   );
@@ -245,6 +227,7 @@ export default function Home() {
   const [pitchData, setPitchData] = useState(null);
   const [editingField, setEditingField] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedPitch, setSelectedPitch] = useState(null);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -299,13 +282,14 @@ export default function Home() {
   };
 
   const handleLocationSelect = async (latlng) => {
+    // Do NOT clear selectedPitch here
     console.log('Location selected:', latlng);
     setSelectedLocation(latlng);
-    
+
     // Fetch nearby pitches
     const pitches = await fetchPitches(latlng.lat, latlng.lng);
     setPitchData(pitches);
-    
+
     try {
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latlng.lat}&lon=${latlng.lng}&addressdetails=1&zoom=18`
@@ -321,7 +305,6 @@ export default function Home() {
         if (data.address.city) parts.push(data.address.city);
         if (data.address.state) parts.push(data.address.state);
         if (data.address.country) parts.push(data.address.country);
-        
         formattedAddress = parts.join(', ');
       } else {
         formattedAddress = data.display_name;
@@ -905,17 +888,52 @@ export default function Home() {
               <h3 className="text-2xl font-bold text-gray-800">
                 {editingField ? 'Edit Field' : 'Add New Field'}
               </h3>
-              <button
-                onClick={() => {
-                  setShowAddFieldModal(false);
-                  setEditingField(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {editingField && fields.some(f => f.id === editingField.id) && (
+                  <button
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to delete this field? This action cannot be undone.')) {
+                        try {
+                          const fieldId = Number(editingField.id);
+                          const res = await fetch(`http://localhost:3000/api/fields/${fieldId}`, {
+                            method: 'DELETE',
+                            headers: {
+                              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                              'Content-Type': 'application/json'
+                            }
+                          });
+                          if (res.ok) {
+                            setFields(prev => prev.filter(field => field.id !== editingField.id));
+                            setShowAddFieldModal(false);
+                            setEditingField(null);
+                          } else {
+                            const data = await res.json();
+                            alert(data.error || 'Failed to delete field.');
+                          }
+                        } catch (error) {
+                          alert('Error deleting field.');
+                        }
+                      }
+                    }}
+                    className="p-2 rounded-full bg-red-100 hover:bg-red-200 transition text-red-600 text-xl flex items-center justify-center mr-2"
+                    title="Delete field"
+                    type="button"
+                  >
+                    <span role="img" aria-label="Delete">🗑️</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setShowAddFieldModal(false);
+                    setEditingField(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
             {isLocating && (
               <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-blue-600 flex items-center gap-2">
@@ -987,14 +1005,13 @@ export default function Home() {
                     minZoom={3}
                   />
                   <MapCenter center={mapCenter} />
-                  <LocationMarker initialPosition={initialMarkerPosition} />
                   <MapEvents onMove={handleMapMove} />
                   <MapClickHandler onLocationSelect={handleLocationSelect} />
                   {selectedLocation && pitchData && (
                     <PitchLayer 
                       data={pitchData} 
-                      onPitchSelect={(pitchData) => {
-                        console.log('Pitch selected:', pitchData);
+                      onPitchSelect={pitchData => {
+                        setSelectedPitch(pitchData);
                         setFormData(prev => ({
                           ...prev,
                           area: pitchData.area,
@@ -1003,12 +1020,13 @@ export default function Home() {
                           topLeftLat: pitchData.topLeftLat,
                           topLeftLng: pitchData.topLeftLng,
                           bottomRightLat: pitchData.bottomRightLat,
-                          bottomRightLng: pitchData.bottomRightLng
+                          bottomRightLng: pitchData.bottomRightLng,
                         }));
-                        // Also update the location name when a pitch is selected
-                        handleLocationSelect({ lat: pitchData.lat, lng: pitchData.lng });
                       }}
                     />
+                  )}
+                  {selectedPitch && selectedPitch.lat && selectedPitch.lng && (
+                    <Marker position={[selectedPitch.lat, selectedPitch.lng]} />
                   )}
                 </MapContainer>
                 {/* Search Button */}

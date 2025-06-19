@@ -299,6 +299,27 @@ app.post('/api/fields', authenticateToken, async (req, res) => {
   }
 });
 
+app.delete('/api/fields/:id', authenticateToken, async (req, res) => {
+  const fieldId = req.params.id;
+  const userId = req.user.userId;
+
+  try {
+    // Ensure the field belongs to the user
+    const checkSql = 'SELECT id FROM fields WHERE id = ? AND user_id = ?';
+    const fields = await query(checkSql, [fieldId, userId]);
+    if (fields.length === 0) {
+      return res.status(404).json({ error: 'Field not found or not authorized.' });
+    }
+
+    const deleteSql = 'DELETE FROM fields WHERE id = ? AND user_id = ?';
+    await query(deleteSql, [fieldId, userId]);
+    res.json({ message: 'Field deleted successfully.' });
+  } catch (err) {
+    console.error('Error deleting field:', err);
+    res.status(500).json({ error: 'Error deleting field.' });
+  }
+});
+
 //listen() otvori HTTP server i čeka zahtjeve
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
