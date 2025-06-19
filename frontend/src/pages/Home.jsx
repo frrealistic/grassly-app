@@ -122,7 +122,7 @@ function PitchLayer({ data, onPitchSelect }) {
   return (
     <GeoJSON 
       data={data} 
-      style={() => ({
+      style={() => ({ 
         color: '#3388ff',
         weight: 2,
         fillColor: '#3388ff',
@@ -855,9 +855,17 @@ export default function Home() {
                 {fields.map(field => (
                   <div 
                     key={`field-${field.id}`} 
-                    className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 cursor-pointer"
-                    onClick={() => handleEditField(field)}
+                    className="relative bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-300"
                   >
+                    {/* Edit button in the top right */}
+                    <button
+                      onClick={() => handleEditField(field)}
+                      className="absolute top-3 right-3 p-2 rounded-full hover:bg-gray-100 transition z-10"
+                      title="Edit field"
+                      type="button"
+                    >
+                      <span className="text-xl">✏️</span>
+                    </button>
                     <h3 className="text-xl font-semibold text-gray-800 mb-2">{field.name}</h3>
                     <p className="text-gray-600 mb-4">{field.location}</p>
                     <div className="flex items-center gap-2 text-sm text-gray-500">
