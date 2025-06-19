@@ -201,6 +201,46 @@ function getCoordinates(feature) {
   return {};
 }
 
+// Helper for authenticated requests with token refresh
+async function fetchWithAuth(url, options = {}) {
+  let accessToken = localStorage.getItem('accessToken');
+  let res = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    credentials: 'include',
+  });
+
+  if (res.status === 401 || (res.status === 403 && (await res.clone().json()).error === 'Invalid token.')) {
+    // Try to refresh the token
+    const refreshRes = await fetch('http://localhost:3000/api/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (refreshRes.ok) {
+      const { accessToken: newToken } = await refreshRes.json();
+      localStorage.setItem('accessToken', newToken);
+      // Retry the original request with the new token
+      res = await fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${newToken}`,
+        },
+        credentials: 'include',
+      });
+    } else {
+      // Refresh failed, log out
+      localStorage.removeItem('accessToken');
+      window.location.href = '/login';
+      throw new Error('Session expired. Please log in again.');
+    }
+  }
+  return res;
+}
+
 export default function Home() {
   const isLoggedIn = !!localStorage.getItem('accessToken');
   const navigate = useNavigate();
@@ -464,11 +504,10 @@ export default function Home() {
       
       const method = editingField ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         },
         body: JSON.stringify(fieldData)
       });
@@ -892,13 +931,19 @@ export default function Home() {
                 {editingField && fields.some(f => f.id === editingField.id) && (
                   <button
                     onClick={async () => {
+                      // Only allow delete if the field is in the user's fields array
+                      const realField = fields.find(f => f.id === editingField.id);
+                      if (!realField) {
+                        alert('This field cannot be deleted because it is not in your list.');
+                        setEditingField(null);
+                        return;
+                      }
                       if (window.confirm('Are you sure you want to delete this field? This action cannot be undone.')) {
                         try {
                           const fieldId = Number(editingField.id);
-                          const res = await fetch(`http://localhost:3000/api/fields/${fieldId}`, {
+                          const res = await fetchWithAuth(`http://localhost:3000/api/fields/${fieldId}`, {
                             method: 'DELETE',
                             headers: {
-                              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
                               'Content-Type': 'application/json'
                             }
                           });
